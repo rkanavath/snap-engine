@@ -16,6 +16,7 @@
 
 package org.esa.snap.smart.configurator;
 
+import org.esa.snap.core.gpf.GPF;
 import org.esa.snap.core.util.SystemUtils;
 
 import java.io.IOException;
@@ -36,7 +37,10 @@ public class Benchmark {
      */
     private List<BenchmarkSingleCalculus> benchmarkCalculus;
 
-    public Benchmark(List<Integer> tileSizes, List<Integer> cacheSizes, List<Integer> nbThreads){
+    public Benchmark(List<Integer> tileSizes,
+                     List<Integer> cacheSizes,
+                     List<Integer> nbThreads,
+                     GPF.TileCacheStrategyEnum tileCacheStrategy){
 
         if(tileSizes.isEmpty() || cacheSizes.isEmpty() || nbThreads.isEmpty()){
             throw new IllegalArgumentException("All benchmark parameters need to be filled");
@@ -45,13 +49,13 @@ public class Benchmark {
         benchmarkCalculus = new ArrayList<>();
 
         // duplicate the first values, as the first run is allways slower
-        benchmarkCalculus.add(new BenchmarkSingleCalculus(tileSizes.get(0), cacheSizes.get(0), nbThreads.get(0)));
+        benchmarkCalculus.add(new BenchmarkSingleCalculus(tileSizes.get(0), cacheSizes.get(0), nbThreads.get(0), tileCacheStrategy));
 
         //generate possible calculs list
         for(Integer tileSize : tileSizes){
             for(Integer cacheSize : cacheSizes){
                 for(Integer nbThread : nbThreads){
-                    benchmarkCalculus.add(new BenchmarkSingleCalculus(tileSize, cacheSize, nbThread));
+                    benchmarkCalculus.add(new BenchmarkSingleCalculus(tileSize, cacheSize, nbThread, tileCacheStrategy));
                 }
             }
         }
@@ -75,6 +79,7 @@ public class Benchmark {
     public void loadBenchmarkPerfParams(BenchmarkSingleCalculus benchmarkSingleCalculus){
         ConfigurationOptimizer confOptimizer = ConfigurationOptimizer.getInstance();
         PerformanceParameters benchmarkPerformanceParameters = confOptimizer.getActualPerformanceParameters();
+        benchmarkPerformanceParameters.setTileCacheStrategy(benchmarkSingleCalculus.getTileCacheStrategy());
         benchmarkPerformanceParameters.setDefaultTileSize(benchmarkSingleCalculus.getTileSize());
         benchmarkPerformanceParameters.setCacheSize(benchmarkSingleCalculus.getCacheSize());
         benchmarkPerformanceParameters.setNbThreads(benchmarkSingleCalculus.getNbThreads());

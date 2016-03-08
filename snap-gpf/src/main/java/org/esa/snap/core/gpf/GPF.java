@@ -24,6 +24,8 @@ import org.esa.snap.core.gpf.descriptor.SourceProductDescriptor;
 import org.esa.snap.core.gpf.descriptor.SourceProductsDescriptor;
 import org.esa.snap.core.gpf.internal.OperatorSpiRegistryImpl;
 import org.esa.snap.core.util.Guardian;
+import org.esa.snap.core.util.SystemUtils;
+import org.esa.snap.runtime.Config;
 
 import java.awt.Dimension;
 import java.awt.RenderingHints;
@@ -32,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.prefs.Preferences;
 
 /**
  * <p>The facade for the Graph Processing Framework.
@@ -48,12 +51,28 @@ import java.util.TreeMap;
  */
 public class GPF {
 
+    /**
+     * @deprecated  As of release 3.0, replaced by {@link #TILE_CACHE_STRATEGY}
+     */
+    @Deprecated
     public static final String DISABLE_TILE_CACHE_PROPERTY = "snap.gpf.disableTileCache";
+    /**
+     * @deprecated  As of release 3.0, replaced by {@link #TILE_CACHE_STRATEGY}
+     */
+    @Deprecated
     public static final String USE_FILE_TILE_CACHE_PROPERTY = "snap.gpf.useFileTileCache";
+
+    /**
+     *  Preferences key for the tile cache strategy: memory (default), file or none
+     */
+    public static final String TILE_CACHE_STRATEGY = "snap.gpf.tileCacheStrategy";
+
     public static final String TILE_COMPUTATION_OBSERVER_PROPERTY = "snap.gpf.tileComputationObserver";
 
     public static final String SOURCE_PRODUCT_FIELD_NAME = "sourceProduct";
     public static final String TARGET_PRODUCT_FIELD_NAME = "targetProduct";
+
+    public enum TileCacheStrategyEnum {File, Memory, None}
 
     /**
      * Key for GPF tile size {@link RenderingHints}.
@@ -68,6 +87,53 @@ public class GPF {
                     return val.width > 0 && val.height > 0;
                 }
             });
+
+    /**
+     * Load the tile cache strategy from the preferences.
+     * If no tile cache strategy was set then try to use the old legacy settings
+     * snap.gpf.disableTileCache and snap.gpf.useFileTileCache
+     */
+    public static TileCacheStrategyEnum loadTileCacheStrategy() {
+
+        TileCacheStrategyEnum tileCacheStrategy = null;
+
+        Preferences preferences = Config.instance().preferences();
+        String tileCacheStrategyAsString = preferences.get(GPF.TILE_CACHE_STRATEGY, null);
+
+        // if TILE_CACHE_STRATEGY is set, convert it to enum, else look in the old legacy GPF parameters
+        if (tileCacheStrategyAsString != null) {
+            tileCacheStrategy = TileCacheStrategyEnum.valueOf(tileCacheStrategyAsString);
+        } else {
+            String disableTileCache = preferences.get(DISABLE_TILE_CACHE_PROPERTY, null);
+            if (disableTileCache != null) {
+                SystemUtils.LOG.warning(
+                        "Using deprecated parameter " + DISABLE_TILE_CACHE_PROPERTY + ", replaced by snap.gpf.tileCacheStrategy");
+                if (disableTileCache.equals("true")) {
+                    tileCacheStrategy = TileCacheStrategyEnum.None;
+                }
+            }
+
+            if (tileCacheStrategy != TileCacheStrategyEnum.None) {
+                String useFileTileCache = preferences.get(USE_FILE_TILE_CACHE_PROPERTY, null);
+                if (useFileTileCache != null) {
+                    SystemUtils.LOG.warning(
+                            "Using deprecated parameter " + USE_FILE_TILE_CACHE_PROPERTY + ", replaced by snap.gpf.tileCacheStrategy");
+                    if (useFileTileCache.equals("true")) {
+                        tileCacheStrategy = TileCacheStrategyEnum.File;
+                    } else {
+                        tileCacheStrategy = TileCacheStrategyEnum.Memory;
+                    }
+                }
+            }
+        }
+
+        // if it is not set, change it to default = memory
+        if(tileCacheStrategy == null) {
+            tileCacheStrategy = TileCacheStrategyEnum.Memory;
+        }
+
+        return tileCacheStrategy;
+    }
 
     /**
      * An unmodifiable empty {@link Map Map}.

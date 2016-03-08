@@ -156,30 +156,36 @@ public class OperatorContext {
      * @param image Any JAI OpImage.
      */
     public static void setTileCache(OpImage image) {
-        boolean disableTileCache = Config.instance().preferences().getBoolean(GPF.DISABLE_TILE_CACHE_PROPERTY, false);
-        if (disableTileCache) {
-            image.setTileCache(null);
-        } else if (image.getTileCache() == null) {
-            image.setTileCache(getTileCache());
-            SystemUtils.LOG.finest(String.format("Tile cache assigned to %s", image));
-        }
+        TileCache tileCache = getTileCache();
+        image.setTileCache(tileCache);
+        SystemUtils.LOG.finest(String.format("Tile cache assigned to %s", image));
     }
 
     private static synchronized TileCache getTileCache() {
-        if (tileCache == null) {
-            boolean useFileTileCache = Config.instance().preferences().getBoolean(GPF.USE_FILE_TILE_CACHE_PROPERTY, false);
-            if (useFileTileCache) {
+        GPF.TileCacheStrategyEnum tileCacheStrategy = GPF.loadTileCacheStrategy();
+
+        switch(tileCacheStrategy) {
+            case None:
+                tileCache = null;
+                break;
+            case File:
                 tileCache = new SwappingTileCache(JAI.getDefaultInstance().getTileCache().getMemoryCapacity(),
                                                   new DefaultSwapSpace(SwappingTileCache.DEFAULT_SWAP_DIR,
                                                                        SystemUtils.LOG));
-            } else {
+                break;
+            case Memory:
+            default:
                 tileCache = JAI.getDefaultInstance().getTileCache();
-            }
+                break;
+        }
+
+        if(tileCacheStrategy != GPF.TileCacheStrategyEnum.None) {
             SystemUtils.LOG.fine(
                     String.format("All GPF operators will share an instance of %s with a capacity of %dM",
                                   tileCache.getClass().getName(),
                                   tileCache.getMemoryCapacity() / (1024 * 1024)));
         }
+
         return tileCache;
     }
 

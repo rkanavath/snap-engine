@@ -20,6 +20,8 @@
 package org.esa.snap.smart.configurator;
 
 
+import org.esa.snap.core.gpf.GPF;
+import org.esa.snap.core.gpf.GPF.TileCacheStrategyEnum;
 import org.esa.snap.core.util.SystemUtils;
 import org.esa.snap.runtime.Config;
 import org.esa.snap.runtime.EngineConfig;
@@ -41,7 +43,6 @@ import java.util.prefs.Preferences;
  */
 public class PerformanceParameters {
 
-
     /**
      * Preferences key for the default tile size in pixels
      */
@@ -53,13 +54,14 @@ public class PerformanceParameters {
     public static final String PROPERTY_JAI_CACHE_SIZE = "snap.jai.tileCacheSize";
 
 
-
     private VMParameters vmParameters;
     private Path cachePath;
     private int nbThreads;
 
     private int defaultTileSize;
     private int cacheSize;
+
+    private TileCacheStrategyEnum tileCacheMode;
 
     /**
      * Default constructor
@@ -77,6 +79,7 @@ public class PerformanceParameters {
         this.setVMParameters(clone.vmParameters.toString());
         this.setCachePath(clone.getCachePath());
 
+        this.setTileCacheStrategy(clone.getTileCacheStrategy());
         this.setNbThreads(clone.getNbThreads());
         this.setDefaultTileSize(clone.getDefaultTileSize());
         this.setCacheSize(clone.getCacheSize());
@@ -103,6 +106,15 @@ public class PerformanceParameters {
         this.cachePath = largeTileCache;
     }
 
+
+    public TileCacheStrategyEnum getTileCacheStrategy() {
+        return tileCacheMode;
+    }
+
+    public void setTileCacheStrategy(TileCacheStrategyEnum tileCacheMode) {
+        this.tileCacheMode = tileCacheMode;
+    }
+
     public int getNbThreads() {
         return nbThreads;
     }
@@ -110,6 +122,8 @@ public class PerformanceParameters {
     public void setNbThreads(int nbThreads) {
         this.nbThreads = nbThreads;
     }
+
+
 
     /**
      * Build a string from vm parameters
@@ -148,6 +162,7 @@ public class PerformanceParameters {
     }
 
 
+
     /**
      *
      * Reads the parameters files and system settings to retreive the actual performance parameters.
@@ -166,6 +181,8 @@ public class PerformanceParameters {
         actualParameters.setVMParameters(netBeansVmParameters.toString());
         actualParameters.setCachePath(SystemUtils.getCacheDir().toPath());
 
+        TileCacheStrategyEnum tileCacheStrategy = GPF.loadTileCacheStrategy();
+        actualParameters.setTileCacheStrategy(tileCacheStrategy);
         final int defaultNbThreads = JavaSystemInfos.getInstance().getNbCPUs();
         actualParameters.setNbThreads(preferences.getInt(SystemUtils.SNAP_PARALLELISM_PROPERTY_NAME, defaultNbThreads));
         actualParameters.setDefaultTileSize(preferences.getInt(PROPERTY_DEFAULT_TILE_SIZE, 0));
@@ -202,17 +219,20 @@ public class PerformanceParameters {
             SystemUtils.LOG.severe("Directory for cache path does not exist");
         }
 
+        preferences.put(GPF.TILE_CACHE_STRATEGY, confToSave.getTileCacheStrategy().toString());
+
+
         int parallelism = confToSave.getNbThreads();
         int defaultTileSize = confToSave.getDefaultTileSize();
-        int jaiCacheSize = confToSave.getCacheSize();
+        long jaiCacheSize = confToSave.getCacheSize();
         preferences.putInt(SystemUtils.SNAP_PARALLELISM_PROPERTY_NAME, parallelism);
         preferences.putInt(PROPERTY_DEFAULT_TILE_SIZE, defaultTileSize);
-        preferences.putInt(PROPERTY_JAI_CACHE_SIZE, jaiCacheSize);
+        preferences.putLong(PROPERTY_JAI_CACHE_SIZE, jaiCacheSize);
 
         preferences.flush();
 
         // effective change of jai parameters
-        TileCache thisTileCache = JAI.createTileCache();
+        TileCache thisTileCache = JAI.createTileCache(jaiCacheSize*1024*1024);
         JAI.getDefaultInstance().setTileCache(thisTileCache);
         JAI.getDefaultInstance().getTileScheduler().setParallelism(parallelism);
         JAI.setDefaultTileSize(new Dimension(defaultTileSize, defaultTileSize));

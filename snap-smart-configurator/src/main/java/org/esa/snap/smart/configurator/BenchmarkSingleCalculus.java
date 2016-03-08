@@ -16,12 +16,19 @@
 
 package org.esa.snap.smart.configurator;
 
+import org.esa.snap.core.gpf.GPF;
+
 /**
  * Benchmark calcul (test one processing with a set of parameters)
  *
  * @author Manuel Campomanes
  */
 public class BenchmarkSingleCalculus implements Comparable<BenchmarkSingleCalculus> {
+
+    /**
+     * Tile cache strategy: memory (default), file or none
+     */
+    private GPF.TileCacheStrategyEnum tileCacheStrategy;
 
     /**
      * tile size (px)
@@ -43,11 +50,12 @@ public class BenchmarkSingleCalculus implements Comparable<BenchmarkSingleCalcul
      */
     private Long executionTime;
 
-    public BenchmarkSingleCalculus(int tileSize, int cacheSize, int nbThreads){
+    public BenchmarkSingleCalculus(int tileSize, int cacheSize, int nbThreads, GPF.TileCacheStrategyEnum tileCacheStrategy){
         this.tileSize = tileSize;
         this.cacheSize = cacheSize;
         this.nbThreads = nbThreads;
         this.executionTime = null;
+        this.tileCacheStrategy = tileCacheStrategy;
     }
 
    public String toString(){
@@ -78,6 +86,10 @@ public class BenchmarkSingleCalculus implements Comparable<BenchmarkSingleCalcul
             order = -1;
         }
         return order;
+    }
+
+    public GPF.TileCacheStrategyEnum getTileCacheStrategy() {
+        return tileCacheStrategy;
     }
 
     public int getTileSize() {

@@ -146,10 +146,42 @@ public class KMeansClusterOp extends Operator {
     }
 
     @Override
+    public void doExecute(ProgressMonitor pm) throws OperatorException {
+        Rectangle[] tileRectangles = getAllTileRectangles();
+        pm.beginTask("Extracting data points...", tileRectangles.length * iterationCount * 2 + 2);
+        try {
+            roi = new Roi(sourceProduct, sourceBands, roiMaskName);
+            pm.worked(1);
+            final KMeansClusterer clusterer = createClusterer();
+            pm.worked(1);
+
+            boolean endIteration = false;
+            for (int i = 0; (i < iterationCount && !endIteration); ++i) {
+                clusterer.startIteration();
+                for (Rectangle rectangle : tileRectangles) {
+                    checkForCancellation();
+                    PixelIter pixelIterr = createPixelIter(rectangle, SubProgressMonitor.create(pm, 1));
+                    clusterer.iterateTile(pixelIterr);
+                    pm.worked(1);
+                }
+                endIteration = clusterer.endIteration();
+            }
+            clusterSet = clusterer.getClusters();
+
+            ClusterMetaDataUtils.addCenterToIndexCoding(
+                    clusterMapBand.getIndexCoding(), sourceBands, clusterSet.getMeans());
+            ClusterMetaDataUtils.addCenterToMetadata(
+                    clusterAnalysis, sourceBands, clusterSet.getMeans());
+        } finally {
+            pm.done();
+        }
+    }
+
+    @Override
     public void computeTile(Band targetBand, Tile targetTile, ProgressMonitor pm) throws OperatorException {
         pm.beginTask("Computing clusters...", 10);
         try {
-            final KMeansClusterSet theClusterSet = getClusterSet(SubProgressMonitor.create(pm, 9));
+//            final KMeansClusterSet theClusterSet = getClusterSet(SubProgressMonitor.create(pm, 9));
             final Rectangle targetRectangle = targetTile.getRectangle();
             final Tile[] sourceTiles = new Tile[sourceBands.length];
             for (int i = 0; i < sourceTiles.length; i++) {
@@ -164,12 +196,13 @@ public class KMeansClusterOp extends Operator {
                             for (int i = 0; i < sourceTiles.length; i++) {
                                 point[i] = sourceTiles[i].getSampleDouble(x, y);
                             }
-                            targetTile.setSample(x, y, theClusterSet.getMembership(point));
+                            targetTile.setSample(x, y, clusterSet.getMembership(point));
                         } else {
                             targetTile.setSample(x, y, NO_DATA_VALUE);
                         }
                     } catch (ArrayIndexOutOfBoundsException e) {
-                        e.printStackTrace();
+                        throw new OperatorException("Clustering failed due to invalid array access attempt: " +
+                                                            e.getMessage());
                     }
                 }
             }
